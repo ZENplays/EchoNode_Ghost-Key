@@ -2,32 +2,18 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Ghost-Key v3.5.1 - EchoNode CLI</title>
+    <title>Ghost-Key v3.5.2 - EchoNode CLI</title>
     <style>
         body { font-family: 'Courier New', monospace; background: #08080c; color: #00d4ff; padding: 20px; line-height: 1.2; }
         .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
         .box { border: 1px solid #00d4ff; padding: 15px; background: #111118; box-shadow: 0 0 10px #00d4ff22; display: flex; flex-direction: column; }
         textarea { width: 100%; height: 300px; background: #000; color: #00ff88; border: 1px solid #222; padding: 10px; box-sizing: border-box; font-size: 0.8rem; flex-grow: 1; outline: none; }
         textarea:focus { border-color: #00d4ff; }
-        
         .controls { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
-        
-        button { 
-            background: #00d4ff; 
-            color: #000; 
-            border: none; 
-            padding: 12px; 
-            cursor: pointer; 
-            font-weight: bold; 
-            text-transform: uppercase; 
-            transition: all 0.1s;
-        }
-        
+        button { background: #00d4ff; color: #000; border: none; padding: 12px; cursor: pointer; font-weight: bold; text-transform: uppercase; transition: all 0.1s; }
         button:hover { background: #fff; }
         button:active { transform: translateY(1px); }
-        
         .btn-secondary { background: #1a1a1a; color: #00d4ff; border: 1px solid #00d4ff; font-size: 0.75rem; padding: 8px; }
-        
         #transcript { margin-top: 20px; height: 120px; overflow-y: auto; border: 1px solid #333; background: #000; padding: 15px; font-size: 0.85rem; color: #00ff88; }
         .log-entry { margin-bottom: 8px; border-left: 3px solid #00d4ff; padding-left: 10px; word-break: break-all; }
         label { font-size: 0.7rem; color: #555; text-transform: uppercase; letter-spacing: 1px; }
@@ -66,7 +52,7 @@
     </div>
 
     <div id="transcript">
-        <div class="log-entry">EchoNode Subsystem [v3.5.1] Online. Waiting for I/O...</div>
+        <div class="log-entry">EchoNode Subsystem [v3.5.2] Online. Systems Synced.</div>
     </div>
 
 <script>
@@ -75,6 +61,9 @@ const morseMap = {'1':'.----','2':'..---','3':'...--','4':'....-','5':'.....','6
 const revMorse = Object.fromEntries(Object.entries(morseMap).map(([k,v])=>[v,k]));
 const noisePool = "0123456789ABCDEFHIJKLMNOPQRSTUVWXYZ!@#$%^&*";
 const TERMINATOR = "%1O0X!";
+
+// Keep track if the current 'cipherOutput' is something WE generated or something WE imported
+let lastActionWasEncrypt = false;
 
 function addLog(sender, text) {
     const log = document.getElementById('transcript');
@@ -92,6 +81,10 @@ function runGhostEncrypt() {
     let input = document.getElementById('plainInput').value.toUpperCase();
     if(!input) return;
     let anchor = document.getElementById('anchorKey').value;
+    
+    // Log the message to terminal immediately
+    addLog('user', input);
+
     let secretKey = "";
     for(let i=0; i<10; i++) secretKey += (Math.floor(Math.random() * 4) + 1);
 
@@ -134,7 +127,9 @@ function runGhostEncrypt() {
     crashReport += `STREAMS_CAPTURED: 1 | STATUS: DUMP_COMPLETE`;
 
     document.getElementById('cipherOutput').value = crashReport;
-    addLog('system', `Encoded with ${autoJunk} chars of entropy.`);
+    lastActionWasEncrypt = true; // Flag that this box now contains OUR outbound message
+    
+    addLog('system', `Encoded message with ${autoJunk} chars of entropy.`);
     document.getElementById('plainInput').value = "";
 }
 
@@ -176,18 +171,24 @@ function runGhostDecrypt() {
     if(finalMsg) {
         addLog('remote', finalMsg);
         document.getElementById('plainInput').value = finalMsg;
-    } else { addLog('system', 'RECONSTRUCTION FAILED.'); }
+    } else {
+        addLog('system', 'RECONSTRUCTION FAILED.');
+    }
 }
 
 function exportToFile() {
     let text = document.getElementById('cipherOutput').value;
-    if(!text) return;
+    if(!text || !lastActionWasEncrypt) {
+        addLog('system', 'ABORT: Generate a new log before exporting.');
+        return;
+    }
     let blob = new Blob([text], {type: "text/plain"});
     let anchor = document.createElement("a");
     anchor.download = `debug_log_${Math.floor(Date.now()/1000)}.log`;
     anchor.href = window.URL.createObjectURL(blob);
     anchor.click();
     addLog('system', 'Log saved to disk.');
+    lastActionWasEncrypt = false; // Reset so we don't export the same file twice
 }
 
 function importFromFile(input) {
@@ -195,6 +196,7 @@ function importFromFile(input) {
     let reader = new FileReader();
     reader.onload = function() {
         document.getElementById('cipherOutput').value = reader.result;
+        lastActionWasEncrypt = false; // Flag that this is an INBOUND file
         addLog('system', `Imported ${file.name}`);
         runGhostDecrypt();
     };
