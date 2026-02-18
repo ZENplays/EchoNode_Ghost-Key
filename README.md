@@ -1,2 +1,3 @@
-# ghost-key
-message encryption
+# EchoNode Ghost-Key
+
+Message Encryption Sender and Receiver Project
